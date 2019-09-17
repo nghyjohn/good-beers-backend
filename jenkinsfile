@@ -4,17 +4,17 @@ def dockerRegistry = "registry.rh-internal.tk"
 def env1 = "dev" 
 def env2 = "uat"
 def env3 = "sit"
-def env4 = "prod" 
-def SEC_PASS=0
+def env4 = "prod"
+def SEC_PASS=0  
 def QUA_PASS=0
-def jsonObj
-def resultstring
-def gitDiff
-def changes = "Changes:\n"
-build = currentBuild
-    changes += "In ${build.id}:\n"
-    for (changeLog in build.changeSets) {
-        for(entry in changeLog.items) {
+def jsonObj     
+def resultstring  
+def gitDiff        
+def changes = "Changes:\n"  
+build = currentBuild    
+    changes += "In ${build.id}:\n" 
+    for (changeLog in build.changeSets) { 
+        for(entry in changeLog.items) {    
             for(file in entry.affectedFiles) {
                 changes += "* ${file.path}\n"
             }
@@ -37,9 +37,9 @@ pipeline {
         NEXUS_ARTIFACT_REPOSITORY = "good-beers-backend"
         NEXUS_CREDENTIAL_ID = "nexus"
 
-    }
-   stages {
-    stage('Build App') {
+    } 
+   stages {         
+    stage('Build App') {  
       steps {
         // git branch: ${BRANCH}, url: 'http://gitlab-ee.13.94.25.165.nip.io/root/demo.git'
           script {
@@ -47,14 +47,14 @@ pipeline {
             version = pom.version
             gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
           }
-          // echo changes  
-          //echo gitDiff
+          echo changes     
+          echo gitDiff
           sh " mvn -f pom.xml install -DskipTests=true" 
       }
     post{  
       failure{ 
            withEnv(['JIRA_SITE=jira-demo']){
-            script{
+            script{     
                 def issue = [fields:[project: [key: 'GOOD'],
                 summary: 'build failed',
                 description: "${gitDiff}",
@@ -187,6 +187,11 @@ pipeline {
     }
    }
   }
+    stage('Image Sync') {
+     steps { 
+       sh "skopeo copy docker://"+ dockerRegistry +"/"+ deploymentConfig +":${version} docker://docker.io/devopsprojects/"+ deploymentConfig +":${version} --src-creds admin:admin123 --dest-creds devopsprojects:Abcd@1234"
+     }
+   }
     stage('Unit Test') {
      steps {
        sh "mvn -f pom.xml test"
@@ -270,7 +275,7 @@ pipeline {
     }
     steps {
       timeout(time:10, unit:'MINUTES') {
-      input message: "Promote to UAT?", ok: "Promote", submitter: "uat_admin-admin-edit-view"
+      input message: "Promote to UAT?", ok: "Promote" //, submitter: "uat_admin-admin-edit-view"
       script {
         sleep 5
         sh script: "curl -s -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X GET 'https://${NEXUS_URL}/service/rest/v1/search?repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' > test.out"
@@ -333,7 +338,7 @@ pipeline {
     }
     steps {
       timeout(time:10, unit:'MINUTES') {
-      input message: "Promote to Prod?", ok: "Promote", submitter: "prd_admin-admin-edit-view"
+      input message: "Promote to Prod?", ok: "Promote" //, submitter: "prd_admin-admin-edit-view"
       script {
         sleep 5
         sh script: "curl -s -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X GET 'https://${NEXUS_URL}/service/rest/v1/search?repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' > test.out"
