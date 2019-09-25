@@ -7,12 +7,12 @@ def env3 = "sit"
 def env4 = "prod"
 def SEC_PASS=0  
 def QUA_PASS=0
-def jsonObj     
-def resultstring  
-def gitDiff        
-def changes = "Changes:\n"  
+def jsonObj      
+def resultstring       
+def gitDiff         
+def changes = "Changes:\n"
 build = currentBuild    
-    changes += "In ${build.id}:\n" 
+    changes += "In ${build.id}:\n"   
     for (changeLog in build.changeSets) { 
         for(entry in changeLog.items) {    
             for(file in entry.affectedFiles) {
@@ -25,18 +25,19 @@ pipeline {
         label 'test'
     }
   environment {
+        base_image="redhat-openjdk18-openshift:1.4"
         artifact_id = "spring-boot-ionic-example"
         GITLAB_URL = 'http://gitlab-ee.13.94.25.165.nip.io/root/good-beer-demo.git'
-        SONAR_PROJECT_KEY = 'good-beers'
-        SONAR_URL = 'https://sqube.rh-internal.tk'
-        SONAR_LOGIN = 'ae8947cf5cc4471fc20c4204753f3136fe1f9e84'
+        SONAR_PROJECT_KEY = 'demo'
+        SONAR_URL = 'https://sqube.rh-internal.tk'  
+        SONAR_LOGIN = '38275b9b3a0d8a615506f5f3739067e3c0c1d26d'
         NEXUS_URL = "nexus.rh-internal.tk"
-        NEXUS_REPOSITORY = "docker"
+        NEXUS_REPOSITORY = "docker"    
         NEXUS_VERSION = "nexus3"
-        NEXUS_PROTOCOL = "https"
+        NEXUS_PROTOCOL = "https"  
         NEXUS_ARTIFACT_REPOSITORY = "good-beers-backend"
         NEXUS_CREDENTIAL_ID = "nexus"
-
+        DOCKER_SECRET = "nexus-pro"
     } 
    stages {         
     stage('Build App') {  
@@ -71,7 +72,7 @@ pipeline {
     stage('Code Analysis') {
      steps {
       script {
-         sh "mvn -f pom.xml sonar:sonar -Dsonar.projectKey=demo -Dsonar.host.url=https://sqube.rh-internal.tk -Dsonar.login=38275b9b3a0d8a615506f5f3739067e3c0c1d26d" 
+         sh "mvn -f pom.xml sonar:sonar -Dsonar.projectKey=${SONAR_PROJECT_KEY} -Dsonar.host.url=${SONAR_URL} -Dsonar.login=${SONAR_LOGIN}" 
       }
      }
      post{
@@ -136,7 +137,7 @@ pipeline {
               openshift.selector('svc', deploymentConfig).delete()
               openshift.selector('route', deploymentConfig).delete()
             }
-            openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-pro")
+            openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=${base_image}", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=${DOCKER_SECRET}")
             }
         }
       }
@@ -172,7 +173,7 @@ pipeline {
         }
       }
      steps {
-      script {
+      script {  
        openshift.withCluster() {
         openshift.withProject(env1) {
          def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
@@ -196,7 +197,7 @@ pipeline {
      steps {
        sh "mvn -f pom.xml test"
        step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
-       //sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=TES"
+       sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=GOOD"
      }
      post{
       success{
