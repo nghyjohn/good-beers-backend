@@ -5,8 +5,8 @@ metadata:
     pipeline.alpha.openshift.io/uses: '[{"name": "jenkins", "namespace": "", "kind": "DeploymentConfig"}]'
   labels:
     name: jenkins
-  name: demo
-  namespace: cicd
+  name: sample-pipeline
+  namespace: technet
 spec:
   failedBuildsHistoryLimit: 5
   nodeSelector: {}
@@ -16,7 +16,7 @@ spec:
   runPolicy: Serial
   source:
     git:
-      uri: 'http://gitlab-ce.13.94.25.165.nip.io/root/demo.git'
+      uri: 'http://technet-gitlab-technet.apps.ocp4.technet.local/root/good-beer-backend.git'
     type: Git
   strategy:
     jenkinsPipelineStrategy:
