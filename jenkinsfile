@@ -184,7 +184,7 @@ pipeline {
             sleep 30
          }
          // openshift.set("triggers", "dc/"+deploymentConfig, "--manual")
-		 def connected = openshift.verifyService(${deploymentConfig})
+		 def connected = openshift.verifyService(deploymentConfig)
 		 if (connected) {
 			echo "Able to connect to ${deploymentConfig}"
 		 } else {
