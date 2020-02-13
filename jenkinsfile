@@ -130,8 +130,10 @@ pipeline {
       script {
         openshift.withCluster() {
             openshift.withProject(env1) {
-            if (openshift.selector('dc', deploymentConfig).exists()) {
+            if (openshift.selector('bc', deploymentConfig).exists()) {
               openshift.selector("bc", imageBuildConfig).delete()
+            }
+            if (openshift.selector('dc', deploymentConfig).exists()) {
               openshift.selector('dc', deploymentConfig).delete()
               openshift.selector('svc', deploymentConfig).delete()
               openshift.selector('route', deploymentConfig).delete()
