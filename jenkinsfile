@@ -136,8 +136,8 @@ pipeline {
               openshift.selector('svc', deploymentConfig).delete()
               openshift.selector('route', deploymentConfig).delete()
             }
-            //openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-pro")
-			openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true")
+            openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-docker")
+			//openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true")
             }
         }
       }
@@ -155,12 +155,14 @@ pipeline {
          }
        }
      }
+	 /*
      post{
       success{
           sh "if [ ${SEC_PASS} == 1 ]; then curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/DEV_Security_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json'; fi"
           sh "if [ ${QUA_PASS} == 1 ]; then curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/DEV_Quality_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json'; fi"
       }
     }
+	*/
    }
    stage('Deploy DEV') {
      when {
@@ -176,8 +178,8 @@ pipeline {
       script {
        openshift.withCluster() {
         openshift.withProject(env1) {
-         //def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
-		 def app = openshift.newApp(deploymentConfig+":latest")
+         def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
+		 //def app = openshift.newApp(deploymentConfig+":latest")
          app.narrow("svc").expose();
          def dc = openshift.selector("dc", deploymentConfig)
          while (dc.object().spec.replicas != dc.object().status.availableReplicas) {
