@@ -1,6 +1,6 @@
 def imageBuildConfig = "good-beers"
 def deploymentConfig = "good-beers"
-def dockerRegistry = "registry.rh-internal.tk"
+def dockerRegistry = "nexus-docker-technet.apps.ocp4.technet.local"
 def env1 = "good-beer"
 def env2 = "good-beer"
 def env3 = "good-beer"
@@ -30,8 +30,8 @@ pipeline {
         SONAR_PROJECT_KEY = 'good-beers'
         SONAR_URL = 'https://sqube.rh-internal.tk'
         SONAR_LOGIN = 'ae8947cf5cc4471fc20c4204753f3136fe1f9e84'
-        NEXUS_URL = "nexus.rh-internal.tk"
-        NEXUS_REPOSITORY = "docker"
+        NEXUS_URL = "technet-nexus3-technet.apps.ocp4.technet.local"
+        NEXUS_REPOSITORY = "docker-private"
         NEXUS_VERSION = "nexus3"
         NEXUS_PROTOCOL = "https"
         NEXUS_ARTIFACT_REPOSITORY = "good-beers-backend"
@@ -198,7 +198,7 @@ pipeline {
   /*
    stage('Image Sync') {
      steps {
-       sh "skopeo copy docker://"+ dockerRegistry +"/"+ deploymentConfig +":${version} docker://docker.io/devopsprojects/"+ deploymentConfig +":${version} --src-creds admin:admin123 --dest-creds devopsprojects:Abcd@1234"
+       sh "skopeo copy docker://"+ dockerRegistry +"/"+ deploymentConfig +":${version} docker://docker.io/devopsprojects/"+ deploymentConfig +":${version} --src-creds admin:Abcd@123 --dest-creds devopsprojects:Abcd@1234"
      }
    }
     stage('Unit Test') {
