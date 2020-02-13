@@ -1,10 +1,10 @@
-def imageBuildConfig = "spring-boot-ionic-example"
-def deploymentConfig = "spring-boot-ionic-example"
+def imageBuildConfig = "good-beers"
+def deploymentConfig = "good-beers"
 def dockerRegistry = "registry.rh-internal.tk"
-def env1 = "dev" 
-def env2 = "uat"
-def env3 = "sit"
-def env4 = "prod" 
+def env1 = "good-beer"
+def env2 = "good-beer"
+def env3 = "good-beer"
+def env4 = "good-beer"
 def SEC_PASS=0
 def QUA_PASS=0
 def jsonObj
@@ -21,12 +21,12 @@ build = currentBuild
         }
     }
 pipeline {
-  agent { 
-        label 'test'
+  agent {
+        label 'maven'
     }
   environment {
-        artifact_id = "spring-boot-ionic-example"
-        GITLAB_URL = 'http://gitlab-ee.13.94.25.165.nip.io/root/good-beer-demo.git'
+        artifact_id = "good-beers"
+        GITLAB_URL = 'http://technet-gitlab-technet.apps.ocp4.technet.local/root/good-beer-backend.git'
         SONAR_PROJECT_KEY = 'good-beers'
         SONAR_URL = 'https://sqube.rh-internal.tk'
         SONAR_LOGIN = 'ae8947cf5cc4471fc20c4204753f3136fe1f9e84'
@@ -47,19 +47,19 @@ pipeline {
             version = pom.version
             gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
           }
-          // echo changes  
+          // echo changes
           //echo gitDiff
-          sh " mvn -f pom.xml install -DskipTests=true" 
+          sh " mvn -f pom.xml install -DskipTests=true"
       }
-    post{  
-      failure{ 
+    post{
+      failure{
            withEnv(['JIRA_SITE=jira-demo']){
             script{
                 def issue = [fields:[project: [key: 'GOOD'],
                 summary: 'build failed',
                 description: "${gitDiff}",
                 issuetype: [name: 'Bug']]]
- 
+
                 response = jiraNewIssue issue: issue
                 echo response.successful.toString()
                 echo response.data.toString()
@@ -67,11 +67,11 @@ pipeline {
            }
       }
      }
-    }
+    }/*
     stage('Code Analysis') {
      steps {
       script {
-         sh "mvn -f pom.xml sonar:sonar -Dsonar.projectKey=demo -Dsonar.host.url=https://sqube.rh-internal.tk -Dsonar.login=38275b9b3a0d8a615506f5f3739067e3c0c1d26d" 
+         sh "mvn -f pom.xml sonar:sonar -Dsonar.projectKey=demo -Dsonar.host.url=https://sqube.rh-internal.tk -Dsonar.login=38275b9b3a0d8a615506f5f3739067e3c0c1d26d"
       }
      }
      post{
@@ -124,7 +124,7 @@ pipeline {
             }
            }
        }
-     }
+     }*/
     stage('Create Image Builder') {
      steps {
       script {
@@ -136,21 +136,22 @@ pipeline {
               openshift.selector('svc', deploymentConfig).delete()
               openshift.selector('route', deploymentConfig).delete()
             }
-            openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-pro")
+            //openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-pro")
+			openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true")
             }
         }
       }
      }
-    }       
+    }
     stage('Build Image') {
-     steps { 
+     steps {
        sh "rm -rf oc-build && mkdir -p oc-build/deployments"
        sh "cp target/ROOT.jar oc-build/deployments/ROOT.jar"
        script {
          openshift.withCluster() {
            openshift.withProject(env1) {
              openshift.selector("bc", imageBuildConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
-           } 
+           }
          }
        }
      }
@@ -175,20 +176,28 @@ pipeline {
       script {
        openshift.withCluster() {
         openshift.withProject(env1) {
-         def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
+         //def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
+		 def app = openshift.newApp(deploymentConfig+":latest")
          app.narrow("svc").expose();
          def dc = openshift.selector("dc", deploymentConfig)
          while (dc.object().spec.replicas != dc.object().status.availableReplicas) {
             sleep 30
          }
          // openshift.set("triggers", "dc/"+deploymentConfig, "--manual")
-         }
+		 def connected = openshift.verifyService(${deploymentConfig})
+		 if (connected) {
+			echo "Able to connect to ${deploymentConfig}"
+		 } else {
+			echo "Unable to connect to ${deploymentConfig}"
+		 }
+        }
        }
     }
    }
   }
-    stage('Image Sync') {
-     steps { 
+  /*
+   stage('Image Sync') {
+     steps {
        sh "skopeo copy docker://"+ dockerRegistry +"/"+ deploymentConfig +":${version} docker://docker.io/devopsprojects/"+ deploymentConfig +":${version} --src-creds admin:admin123 --dest-creds devopsprojects:Abcd@1234"
      }
    }
@@ -208,7 +217,7 @@ pipeline {
     }
     }
   stage('SIT-Checking'){
-    when { 
+    when {
       allOf{
           expression {
               !(env.GIT_BRANCH =~ "feature")
@@ -234,7 +243,7 @@ pipeline {
           }
           expression {
               (resultstring =~ "DEV_Security_Pass")
-          }    
+          }
           expression {
               !(env.GIT_BRANCH =~ "feature")
           }
@@ -246,10 +255,10 @@ pipeline {
        openshift.withProject(env3) {
         if (openshift.selector('dc', deploymentConfig).exists()) {
               openshift.selector('dc', deploymentConfig).delete()
-              openshift.selector('svc', deploymentConfig).delete() 
+              openshift.selector('svc', deploymentConfig).delete()
               openshift.selector('route', deploymentConfig).delete()
             }
-        def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true") 
+        def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
         app.narrow("svc").expose();
       }
      }
@@ -264,10 +273,10 @@ pipeline {
   }
   stage('Promote to UAT?') {
     when {
-      allOf{   
+      allOf{
           expression {
               !(env.GIT_BRANCH =~ "develop")
-          }    
+          }
           expression {
               !(env.GIT_BRANCH =~ "feature")
           }
@@ -281,7 +290,7 @@ pipeline {
         sh script: "curl -s -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X GET 'https://${NEXUS_URL}/service/rest/v1/search?repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' > test.out"
         resultstring =  readFile('test.out').trim()
         jsonObj = readJSON text: resultstring
-        resultstring = "${jsonObj.items.tags}" 
+        resultstring = "${jsonObj.items.tags}"
         }
         echo "Current tags: ${resultstring}"
       }
@@ -295,10 +304,10 @@ pipeline {
           }
           expression {
               (resultstring =~ "SIT_Security_Pass")
-          }  
+          }
           expression {
               !(env.GIT_BRANCH =~ "develop")
-          }    
+          }
           expression {
               !(env.GIT_BRANCH =~ "feature")
           }
@@ -316,7 +325,7 @@ pipeline {
             // openshift.newApp(deploymentConfig +":${version}").narrow("svc").expose()
             def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
             app.narrow("svc").expose();
-         }   
+         }
         }
       }
     }
@@ -327,11 +336,11 @@ pipeline {
      }
     }
   }
-  stage('Promote to Prod?') { 
-    when {  
+  stage('Promote to Prod?') {
+    when {
           expression {
               !(env.GIT_BRANCH =~ "develop")
-          }    
+          }
           expression {
               !(env.GIT_BRANCH =~ "feature")
           }
@@ -344,13 +353,13 @@ pipeline {
         sh script: "curl -s -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X GET 'https://${NEXUS_URL}/service/rest/v1/search?repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' > test.out"
         resultstring =  readFile('test.out').trim()
         jsonObj = readJSON text: resultstring
-        resultstring = "${jsonObj.items.tags}" 
+        resultstring = "${jsonObj.items.tags}"
         }
         echo "Current tags: ${resultstring}"
       }
     }
   }
-  stage('Deploy Prod') { 
+  stage('Deploy Prod') {
     when {
       allOf{
           expression {
@@ -358,10 +367,10 @@ pipeline {
           }
           expression {
               (resultstring =~ "UAT_Security_Pass")
-          }   
+          }
           expression {
               !(env.GIT_BRANCH =~ "develop")
-          }    
+          }
           expression {
               !(env.GIT_BRANCH =~ "feature")
           }
@@ -379,10 +388,11 @@ pipeline {
             // openshift.newApp(deploymentConfig +":${version}").narrow("svc").expose()
             def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
             app.narrow("svc").expose();
-         }   
+         }
         }
       }
     }
-  }
+  }*/
  }
 }
+

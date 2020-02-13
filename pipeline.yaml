@@ -1,10 +1,6 @@
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
-  annotations:
-    pipeline.alpha.openshift.io/uses: '[{"name": "jenkins", "namespace": "", "kind": "DeploymentConfig"}]'
-  labels:
-    name: jenkins
   name: sample-pipeline
   namespace: technet
 spec:
