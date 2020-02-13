@@ -204,7 +204,6 @@ pipeline {
     stage('Unit Test') {
      steps {
        sh "mvn -f pom.xml test"
-       //step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
        //sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=TES"
      }
      post{
