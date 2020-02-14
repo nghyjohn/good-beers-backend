@@ -1,4 +1,4 @@
-def imageBuildConfig = "good-beers"  
+def imageBuildConfig = "good-beers" 
 def deploymentConfig = "good-beers"
 def dockerRegistry = "nexus-docker-technet.apps.ocp4.technet.local"
 //def dockerRegistry = "172.30.90.45:5000"
