@@ -30,7 +30,7 @@ public class DemoApplicationTests
         try {  
             httpclient = HttpClients.createDefault();    
             // 创建httpget.      
-            HttpGet httpget = new HttpGet("http://spring-boot-ionic-example-dev.13.94.25.165.nip.io/good-beers");    
+            HttpGet httpget = new HttpGet("http://good-beers-good-beer.apps.ocp4.technet.local/good-beers");    
             // 执行get请求.      
             response = httpclient.execute(httpget);    
             // 获取响应实体      
@@ -63,7 +63,7 @@ public class DemoApplicationTests
         try {  
             httpclient = HttpClients.createDefault();    
             // 创建httpget.      
-            HttpGet httpget = new HttpGet("http://spring-boot-ionic-example-dev.13.94.25.165.nip.io/good-beers");    
+            HttpGet httpget = new HttpGet("http://good-beers-good-beer.apps.ocp4.technet.local/good-beers");    
             // 执行get请求.      
             response = httpclient.execute(httpget);    
             // 获取响应实体      
