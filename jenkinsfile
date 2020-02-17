@@ -44,22 +44,6 @@ pipeline {
           //echo gitDiff
           sh " mvn -f pom.xml install -DskipTests=true"
       }
-    post{
-      failure{
-           withEnv(['JIRA_SITE=jira-demo']){
-            script{
-                def issue = [fields:[project: [key: 'GOOD'],
-                summary: 'build failed',
-                description: "${gitDiff}",
-                issuetype: [name: 'Bug']]]
-
-                response = jiraNewIssue issue: issue
-                echo response.successful.toString()
-                echo response.data.toString()
-            }
-           }
-      }
-     }
     }
     stage('Create Image Builder') {
      steps {
@@ -132,14 +116,6 @@ pipeline {
        sh "mvn -f pom.xml test"
        //sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=TES"
      }
-     post{
-      success{
-          sh "curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/DEV_Quality_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json'"
-      }
-      failure {
-        sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=TES"
-      }
-    }
     }
   stage('Deploy to SIT') {
     steps {
@@ -230,12 +206,6 @@ pipeline {
   stage('Deploy Prod') {
     when {
       allOf{
-          expression {
-              (resultstring =~ "UAT_Quality_Pass")
-          }
-          expression {
-              (resultstring =~ "UAT_Security_Pass")
-          }
           expression {
               !(env.GIT_BRANCH =~ "develop")
           }
