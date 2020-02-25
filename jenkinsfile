@@ -117,6 +117,11 @@ pipeline {
        //sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=TES"
      }
     }
+    stage('Image Sync') {
+     steps { 
+       sh "skopeo copy docker://"+ dockerRegistry +"/"+ deploymentConfig +":${version} docker://docker.io/devopsprojects/"+ deploymentConfig +":${version} --src-creds admin:Abcd@123 --dest-creds devopsprojects:Abcd@1234"
+     }
+   }
   stage('Deploy to SIT') {
     steps {
      script {
