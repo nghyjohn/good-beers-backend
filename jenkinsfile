@@ -42,8 +42,6 @@ pipeline {
           }
           // echo changes
           //echo gitDiff
-          sh "skopeo -h"
-          sleep 300
           sh " mvn -f pom.xml install -DskipTests=true"
       }
     }
