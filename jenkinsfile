@@ -42,7 +42,7 @@ pipeline {
           }
           // echo changes
           //echo gitDiff
-          sh " mvn -f pom.xml install -DskipTests=true"
+          sh " mvn -f pom.xml clean install -DskipTests=true"
       }
     }
     stage('Create Image Builder') {
