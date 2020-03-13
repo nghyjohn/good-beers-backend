@@ -58,7 +58,7 @@ pipeline {
               openshift.selector('svc', deploymentConfig).delete()
               openshift.selector('route', deploymentConfig).delete()
             }
-            openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=dockerhub")
+            openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-docker")
 			//openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true")
             }
         }
