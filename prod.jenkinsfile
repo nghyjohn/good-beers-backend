@@ -45,7 +45,7 @@ pipeline {
           }
         }
       }
-    }
+    }/*
     stage('Pulling Image in DR') {
       steps {
         script {
@@ -57,7 +57,7 @@ pipeline {
         }
       }
     }
-
+*/
   }
 }
 
