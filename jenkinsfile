@@ -2,9 +2,9 @@ def imageBuildConfig = "good-beers"
 def deploymentConfig = "good-beers"
 def dockerRegistry = "nexus-docker-technet.apps.ocp4.technet.local"
 //def dockerRegistry = "docker.io/devopsprojects"
-def dev = "good-beer"
-def sit = "good-beer-sit"
-def uat = "good-beer-uat"
+def dev = "good-beers"
+def sit = "good-beers-sit"
+def uat = "good-beers-uat"
 def gitDiff
 def changes = "Changes:\n"
 build = currentBuild
