@@ -16,8 +16,7 @@ pipeline {
                 version = pom.version
                 gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
               }
-        //        openshift.tag(dockerRegistry+"/"+deploymentConfig+":"+ version, namespace+"/"+deploymentConfig+":"+ version)
-                openshift.tag( dockerRegistry+"/"+deploymentConfig+":${version}", "${deploymentConfig}:${version}")
+                openshift.tag(dockerRegistry+"/"+deploymentConfig+":"+ version, namespace+"/"+deploymentConfig+":"+ version)
                 openshift.raw("import-image "+dockerRegistry+"/"+deploymentConfig+":${version} --insecure=true --confirm=true")
             }
           }
@@ -52,6 +51,7 @@ pipeline {
         script {
           openshift.withCluster('DR') {
             openshift.withProject(namespace) {
+                openshift.tag( dockerRegistry+"/"+deploymentConfig+":${version}", "${deploymentConfig}:${version}")
                 openshift.raw("import-image "+dockerRegistry+"/"+deploymentConfig+":${version} --insecure=true --confirm=true")
             }
           }
