@@ -1,5 +1,5 @@
 def deploymentConfig = "good-beers"
-def dockerRegistry = "registry.apps.cp-uat.asia2.ccb2.com"
+def dockerRegistry = "nexus-docker-technet.apps.ocp4.technet.local"
 def namespace = "good-beers-prod"
 pipeline {
   agent {
