@@ -37,7 +37,7 @@ pipeline {
                 app.narrow("svc").expose("--port=4443")
               } else {
                 openshift.set("triggers", "dc/"+deploymentConfig, "--remove-all")
-                openshift.set("env", "dc/"+deploymentConfig, "--from configmap/prod-aiaagentapp-config", "--overwrite=true")
+                //openshift.set("env", "dc/"+deploymentConfig, "--from configmap/prod-aiaagentapp-config", "--overwrite=true")
                 openshift.set("triggers", "dc/"+deploymentConfig, "--from-image=${deploymentConfig}:${version} -c ${deploymentConfig}")
                 openshift.set("triggers", "dc/"+deploymentConfig, "--auto")
               }
