@@ -17,6 +17,7 @@ pipeline {
                 gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
               }
         //        openshift.tag(dockerRegistry+"/"+deploymentConfig+":"+ version, namespace+"/"+deploymentConfig+":"+ version)
+                openshift.tag( dockerRegistry+"/"+deploymentConfig+":${version}", "${deploymentConfig}:${version}")
                 openshift.raw("import-image "+dockerRegistry+"/"+deploymentConfig+":${version} --insecure=true --confirm=true")
             }
           }
@@ -36,7 +37,6 @@ pipeline {
                 app.narrow("svc").expose("--port=4443")
               } else {
                 openshift.set("triggers", "dc/"+deploymentConfig, "--remove-all")
-                openshift.tag( dockerRegistry+"/"+deploymentConfig+":${version}", "${deploymentConfig}:${version}")
                 openshift.set("env", "dc/"+deploymentConfig, "--from configmap/prod-aiaagentapp-config", "--overwrite=true")
                 openshift.set("triggers", "dc/"+deploymentConfig, "--from-image=${deploymentConfig}:${version} -c ${deploymentConfig}")
                 openshift.set("triggers", "dc/"+deploymentConfig, "--auto")
@@ -45,7 +45,8 @@ pipeline {
           }
         }
       }
-    }/*
+    }
+/*
     stage('Pulling Image in DR') {
       steps {
         script {
