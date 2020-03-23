@@ -1,0 +1,63 @@
+def deploymentConfig = "good-beers"
+def dockerRegistry = "registry.apps.cp-uat.asia2.ccb2.com"
+def namespace = "good-beers-prod"
+pipeline {
+  agent {
+    label 'master'
+  }
+  stages {
+    stage('Pulling Image in PROD') {
+      steps {
+        script {
+          openshift.withCluster() {
+            openshift.withProject(namespace) {
+              script {
+                def pom = readMavenPom file: 'pom.xml'
+                version = pom.version
+                gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
+              }
+        //        openshift.tag(dockerRegistry+"/"+deploymentConfig+":"+ version, namespace+"/"+deploymentConfig+":"+ version)
+                openshift.raw("import-image "+dockerRegistry+"/"+deploymentConfig+":${version} --insecure=true --confirm=true")
+            }
+          }
+        }
+      }
+    }
+    stage('Deploy to PROD') {
+      steps {
+        script {
+          openshift.withCluster() {
+            openshift.withProject(namespace) {
+              if (!openshift.selector('dc', deploymentConfig).exists()) {
+                def app = openshift.newApp(deploymentConfig+":"+ version)
+                openshift.selector('svc', deploymentConfig).delete()
+                dc = openshift.selector('dc', deploymentConfig)
+                dc.expose("--port=4443")
+                app.narrow("svc").expose("--port=4443")
+              } else {
+                openshift.set("triggers", "dc/"+deploymentConfig, "--remove-all")
+                openshift.tag( dockerRegistry+"/"+deploymentConfig+":${version}", "${deploymentConfig}:${version}")
+                openshift.set("env", "dc/"+deploymentConfig, "--from configmap/prod-aiaagentapp-config", "--overwrite=true")
+                openshift.set("triggers", "dc/"+deploymentConfig, "--from-image=${deploymentConfig}:${version} -c ${deploymentConfig}")
+                openshift.set("triggers", "dc/"+deploymentConfig, "--auto")
+              }
+            }
+          }
+        }
+      }
+    }
+    stage('Pulling Image in DR') {
+      steps {
+        script {
+          openshift.withCluster('DR') {
+            openshift.withProject(namespace) {
+                openshift.raw("import-image "+dockerRegistry+"/"+deploymentConfig+":${version} --insecure=true --confirm=true")
+            }
+          }
+        }
+      }
+    }
+
+  }
+}
+
