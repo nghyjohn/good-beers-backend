@@ -35,6 +35,7 @@ def deployment(namespace,deploymentConfig,dockerRegistry,version) {
         openshift.set("triggers", "dc/"+deploymentConfig, "--auto")
         
       }
+      sleep 20
       def latestDeploymentVersion = openshift.selector('dc',"${deploymentConfig}").object().status.latestVersion
       def rc = openshift.selector('rc', "${deploymentConfig}-${latestDeploymentVersion}")
       timeout (time: 10, unit: 'MINUTES') {
