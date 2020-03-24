@@ -99,7 +99,7 @@ pipeline {
     stage('Deploy DEV') {
       steps {
         script {
-          deployment('dev',deploymentConfig,dockerRegistry,version)
+          deployment(dev,deploymentConfig,dockerRegistry,version)
         }
       }
     }
@@ -112,7 +112,7 @@ pipeline {
     stage('Deploy SIT') {
       steps {
         script {
-          deployment('sit',deploymentConfig,dockerRegistry,version)
+          deployment(sit,deploymentConfig,dockerRegistry,version)
         }
       }
     }
@@ -146,7 +146,7 @@ pipeline {
       }
       steps {
         script {
-            deployment('uat',deploymentConfig,dockerRegistry,version)
+            deployment(uat,deploymentConfig,dockerRegistry,version)
         }
       }
     }
