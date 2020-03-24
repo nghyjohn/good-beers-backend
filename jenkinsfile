@@ -1,345 +1,157 @@
-def imageBuildConfig = "good-beers"  
-def deploymentConfig = "good-beers"
 def dockerRegistry = "nexus-docker-technet.apps.ocp4.technet.local"
-//def dockerRegistry = "172.30.90.45:5000"
-def env1 = "good-beer"
-def env2 = "good-beer"
-def env3 = "good-beer"
-def env4 = "good-beer"
-def SEC_PASS=0
-def QUA_PASS=0
-def jsonObj
-def resultstring
+//def dockerRegistry = "docker.io/devopsprojects"
+def dev = "good-beers"
+def sit = "good-beers-sit"
+def uat = "good-beers-uat"
 def gitDiff
 def changes = "Changes:\n"
 build = currentBuild
-    changes += "In ${build.id}:\n"
-    for (changeLog in build.changeSets) {
-        for(entry in changeLog.items) {
-            for(file in entry.affectedFiles) {
-                changes += "* ${file.path}\n"
-            }
+changes += "In ${build.id}:\n"
+for (changeLog in build.changeSets) {
+    for(entry in changeLog.items) {
+        for(file in entry.affectedFiles) {
+            changes += "* ${file.path}\n"
         }
     }
+}
+
+def deployment(namespace,deploymentConfig,dockerRegistry,version) {
+  openshift.withCluster() {
+    openshift.withProject(namespace) {
+      //def cm = readFile('configmap.yaml')
+      //openshift.apply(cm)
+      if (!openshift.selector('dc', deploymentConfig).exists()) {
+        def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
+        //openshift.set("env", "dc/"+deploymentConfig, "--from configmap/aiaagentapp-config")
+        openshift.selector('svc', deploymentConfig).delete()
+        dc = openshift.selector('dc', deploymentConfig)
+        dc.expose("--port=8080")
+        app.narrow("svc").expose("--port=8080")
+      } else {
+        openshift.set("triggers", "dc/"+deploymentConfig, "--remove-all")
+        openshift.tag( dockerRegistry+"/"+deploymentConfig+":${version}", "${deploymentConfig}:${version}")
+        //openshift.set("env", "dc/"+deploymentConfig, "--from configmap/aiaagentapp-config", "--overwrite=true")
+        openshift.set("triggers", "dc/"+deploymentConfig, "--from-image=${deploymentConfig}:${version} -c ${deploymentConfig}")
+        openshift.set("triggers", "dc/"+deploymentConfig, "--auto")
+        
+      }
+      sleep 20
+      def latestDeploymentVersion = openshift.selector('dc',"${deploymentConfig}").object().status.latestVersion
+      def rc = openshift.selector('rc', "${deploymentConfig}-${latestDeploymentVersion}")
+      timeout (time: 10, unit: 'MINUTES') {
+          rc.untilEach(1){
+              def rcMap = it.object()
+              return (rcMap.status.replicas.equals(rcMap.status.readyReplicas))
+          }
+      }
+
+      def connected = openshift.verifyService(deploymentConfig)
+      if (connected) {
+        echo "Able to connect to ${deploymentConfig}"
+      } else {
+        echo "Unable to connect to ${deploymentConfig}"
+      }
+    }
+  }
+}
+
 pipeline {
   agent {
-        label 'maven'
-    }
+        label 'mvn'
+  }
   environment {
-        artifact_id = "good-beers"
-        GITLAB_URL = 'http://technet-gitlab-technet.apps.ocp4.technet.local/root/good-beer-backend.git'
-        SONAR_PROJECT_KEY = 'good-beers'
-        SONAR_URL = 'https://sqube.rh-internal.tk'
-        SONAR_LOGIN = 'ae8947cf5cc4471fc20c4204753f3136fe1f9e84'
         NEXUS_URL = "technet-nexus3-technet.apps.ocp4.technet.local"
         NEXUS_REPOSITORY = "docker-private"
-        NEXUS_VERSION = "nexus3"
-        NEXUS_PROTOCOL = "https"
-        NEXUS_ARTIFACT_REPOSITORY = "good-beers-backend"
-        NEXUS_CREDENTIAL_ID = "nexus"
-
-    }
-   stages {
+  }
+  stages {
     stage('Build App') {
       steps {
-        // git branch: ${BRANCH}, url: 'http://gitlab-ee.13.94.25.165.nip.io/root/demo.git'
-          script {
-            def pom = readMavenPom file: 'pom.xml'
-            version = pom.version
-            gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
-          }
-          // echo changes
-          //echo gitDiff
-          sh " mvn -f pom.xml install -DskipTests=true"
-      }
-    post{
-      failure{
-           withEnv(['JIRA_SITE=jira-demo']){
-            script{
-                def issue = [fields:[project: [key: 'GOOD'],
-                summary: 'build failed',
-                description: "${gitDiff}",
-                issuetype: [name: 'Bug']]]
-
-                response = jiraNewIssue issue: issue
-                echo response.successful.toString()
-                echo response.data.toString()
-            }
-           }
-      }
-     }
-    }/*
-    stage('Code Analysis') {
-     steps {
-      script {
-         sh "mvn -f pom.xml sonar:sonar -Dsonar.projectKey=demo -Dsonar.host.url=https://sqube.rh-internal.tk -Dsonar.login=38275b9b3a0d8a615506f5f3739067e3c0c1d26d"
-      }
-     }
-     post{
-      success {
-        script{
-          SEC_PASS=1
-          //echo "${SEC_PASS}"
-        }
-      }
-     }
-    }
-    stage("Publish to Artifact") {
-     steps {
         script {
-            // Read POM xml file using 'readMavenPom' step , this step 'readMavenPom' is included in: https://plugins.jenkins.io/pipeline-utility-steps
-            pom = readMavenPom file: "pom.xml";
-            // Find built artifact under target folder
-            filesByGlob = findFiles(glob: "target/*.${pom.packaging}");
-            // Print some info from the artifact found
-            echo "${filesByGlob[0].name} ${filesByGlob[0].path} ${filesByGlob[0].directory} ${filesByGlob[0].length} ${filesByGlob[0].lastModified}"
-            // Extract the path from the File found
-            artifactPath = filesByGlob[0].path;
-            // Assign to a boolean response verifying If the artifact name exists
-            artifactExists = fileExists artifactPath;
-            if(artifactExists) {
-                echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version ${pom.version}";
-                nexusArtifactUploader(
-                    nexusVersion: NEXUS_VERSION,
-                    protocol: NEXUS_PROTOCOL,
-                    nexusUrl: NEXUS_URL,
-                    groupId: pom.groupId,
-                    version: pom.version,
-                    repository: NEXUS_ARTIFACT_REPOSITORY,
-                    credentialsId: NEXUS_CREDENTIAL_ID,
-                    artifacts: [
-                        // Artifact generated such as .jar, .ear and .war files.
-                        [artifactId: pom.artifactId,
-                        classifier: '',
-                        file: artifactPath,
-                        type: pom.packaging],
-                        // Lets upload the pom.xml file for additional information for Transitive dependencies
-                        [artifactId: pom.artifactId,
-                        classifier: '',
-                        file: "pom.xml",
-                        type: "pom"]
-                    ]
-                );
-            } else {
-                error "*** File: ${artifactPath}, could not be found";
-            }
-           }
-       }
-     }*/
-    stage('Create Image Builder') {
-     steps {
-      script {
-        openshift.withCluster() {
-            openshift.withProject(env1) {
-            if (openshift.selector('bc', deploymentConfig).exists()) {
-              openshift.selector("bc", imageBuildConfig).delete()
-            }
-            if (openshift.selector('dc', deploymentConfig).exists()) {
-              openshift.selector('dc', deploymentConfig).delete()
-              openshift.selector('svc', deploymentConfig).delete()
-              openshift.selector('route', deploymentConfig).delete()
-            }
-            openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-docker")
-			//openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true")
-            }
+          def pom = readMavenPom file: 'pom.xml'
+          version = pom.version
+          deploymentConfig = pom.name
+          artifact_id = pom.artifactId
+          gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
         }
+        sh " mvn -f pom.xml clean install -DskipTests=true"
       }
-     }
     }
     stage('Build Image') {
-     steps {
-       sh "rm -rf oc-build && mkdir -p oc-build/deployments"
-       sh "cp target/ROOT.jar oc-build/deployments/ROOT.jar"
-       script {
-         openshift.withCluster() {
-           openshift.withProject(env1) {
-             openshift.selector("bc", imageBuildConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
-           }
-         }
-       }
-     }
-	 /*
-     post{
-      success{
-          sh "if [ ${SEC_PASS} == 1 ]; then curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/DEV_Security_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json'; fi"
-          sh "if [ ${QUA_PASS} == 1 ]; then curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/DEV_Quality_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json'; fi"
-      }
-    }
-	*/
-   }
-   stage('Deploy DEV') {
-     when {
-        expression {
-          openshift.withCluster() {
-            openshift.withProject(env1) {
-              return !openshift.selector('dc', deploymentConfig).exists()
-            }
-          }
-        }
-      }
-     steps {
-      script {
-       openshift.withCluster() {
-        openshift.withProject(env1) {
-         def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
-		 //def app = openshift.newApp(deploymentConfig+":latest")
-         app.narrow("svc").expose();
-         def dc = openshift.selector("dc", deploymentConfig)
-         while (dc.object().spec.replicas != dc.object().status.availableReplicas) {
-            sleep 30
-         }
-         // openshift.set("triggers", "dc/"+deploymentConfig, "--manual")
-		 def connected = openshift.verifyService(deploymentConfig)
-		 if (connected) {
-			echo "Able to connect to ${deploymentConfig}"
-		 } else {
-			echo "Unable to connect to ${deploymentConfig}"
-		 }
-        }
-       }
-    }
-   }
-  }
-  /*
-   stage('Image Sync') {
-     steps {
-       sh "skopeo copy docker://"+ dockerRegistry +"/"+ deploymentConfig +":${version} docker://docker.io/devopsprojects/"+ deploymentConfig +":${version} --src-creds admin:Abcd@123 --dest-creds devopsprojects:Abcd@1234"
-     }
-   }
-    stage('Unit Test') {
-     steps {
-       sh "mvn -f pom.xml test"
-       //sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=TES"
-     }
-     post{
-      success{
-          sh "curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/DEV_Quality_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json'"
-      }
-      failure {
-        sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=TES"
-      }
-    }
-    }
-  stage('SIT-Checking'){
-    when {
-      allOf{
-          expression {
-              !(env.GIT_BRANCH =~ "feature")
-          }
-      }
-    }
-    steps{
+      steps {
+        sh "rm -rf oc-build && mkdir -p oc-build/deployments"
+        sh "cp target/${deploymentConfig}-${version}.jar oc-build/deployments/ROOT.jar"
         script {
-            sleep 5
-            sh script: "curl -s -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X GET 'https://${NEXUS_URL}/service/rest/v1/search?repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' > test.out"
-            resultstring =  readFile('test.out').trim()
-            jsonObj = readJSON text: resultstring
-            resultstring = "${jsonObj.items.tags}"
-        }
-        echo "Current tags: ${resultstring}"
-    }
-  }
-  stage('Promote to SIT') {
-    when {
-      allOf{
-          expression {
-              (resultstring =~ "DEV_Quality_Pass")
-          }
-          expression {
-              (resultstring =~ "DEV_Security_Pass")
-          }
-          expression {
-              !(env.GIT_BRANCH =~ "feature")
-          }
-      }
-    }
-    steps {
-     script {
-      openshift.withCluster() {
-       openshift.withProject(env3) {
-        if (openshift.selector('dc', deploymentConfig).exists()) {
-              openshift.selector('dc', deploymentConfig).delete()
-              openshift.selector('svc', deploymentConfig).delete()
-              openshift.selector('route', deploymentConfig).delete()
+          openshift.withCluster() {
+            openshift.withProject(dev) {
+              if (!openshift.selector('bc', deploymentConfig).exists()) {
+                openshift.newBuild("--name="+ deploymentConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-docker")
+                openshift.selector("bc", deploymentConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
+              } else {
+                def bc = openshift.selector("bc/${deploymentConfig}").object()
+                bc.spec.output.to['name']="${dockerRegistry}/${deploymentConfig}:${version}"
+                openshift.apply(bc)
+                openshift.selector("bc", deploymentConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
+              }
             }
-        def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
-        app.narrow("svc").expose();
-      }
-     }
-    }
-   }
-   post{
-    success{
-        sh " curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/SIT_Security_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json' "
-        sh " curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/SIT_Quality_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json' "
-    }
-   }
-  }
-  stage('Promote to UAT?') {
-    when {
-      allOf{
-          expression {
-              !(env.GIT_BRANCH =~ "develop")
           }
-          expression {
-              !(env.GIT_BRANCH =~ "feature")
-          }
-      }
-    }
-    steps {
-      timeout(time:10, unit:'MINUTES') {
-      input message: "Promote to UAT?", ok: "Promote", submitter: "uat_admin-admin-edit-view"
-      script {
-        sleep 5
-        sh script: "curl -s -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X GET 'https://${NEXUS_URL}/service/rest/v1/search?repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' > test.out"
-        resultstring =  readFile('test.out').trim()
-        jsonObj = readJSON text: resultstring
-        resultstring = "${jsonObj.items.tags}"
         }
-        echo "Current tags: ${resultstring}"
       }
     }
-  }
-  stage('Deploy UAT') {
-    when {
-      allOf{
-          expression {
-              (resultstring =~ "SIT_Quality_Pass")
-          }
-          expression {
-              (resultstring =~ "SIT_Security_Pass")
-          }
-          expression {
-              !(env.GIT_BRANCH =~ "develop")
-          }
-          expression {
-              !(env.GIT_BRANCH =~ "feature")
-          }
+    stage('Deploy DEV') {
+      steps {
+        script {
+          deployment(dev,deploymentConfig,dockerRegistry,version)
+        }
       }
     }
-    steps {
-      script {
-        openshift.withCluster() {
-          openshift.withProject(env2) {
-            if (openshift.selector('dc', deploymentConfig).exists()) {
-              openshift.selector('dc', deploymentConfig).delete()
-              openshift.selector('svc', deploymentConfig).delete()
-              openshift.selector('route', deploymentConfig).delete()
+    stage('Unit Test') {
+      steps {
+        sh "mvn -f pom.xml test"
+        //sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=TES"
+      }
+    }
+    stage('Deploy SIT') {
+      steps {
+        script {
+          deployment(sit,deploymentConfig,dockerRegistry,version)
+        }
+      }
+    }
+    stage('Promote to UAT?') {
+      when {
+        allOf{
+          expression {
+            !(env.GIT_BRANCH =~ "develop")
+          }
+          expression {
+            !(env.GIT_BRANCH =~ "feature")
+          }
+        }
+      }
+      steps {
+        timeout(time:10, unit:'MINUTES') {
+        input message: "Promote to UAT?", ok: "Promote", submitter: "uat_admin-admin-edit-view"
+        }
+      }
+    }
+    stage('Deploy UAT') {
+      when {
+        allOf{
+            expression {
+                !(env.GIT_BRANCH =~ "develop")
             }
-            // openshift.newApp(deploymentConfig +":${version}").narrow("svc").expose()
-            def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
-            app.narrow("svc").expose();
-         }
+            expression {
+                !(env.GIT_BRANCH =~ "feature")
+            }
+        }
+      }
+      steps {
+        script {
+            deployment(uat,deploymentConfig,dockerRegistry,version)
         }
       }
     }
-    post{
-     success{
-        sh " curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/UAT_Security_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json' "
-        sh " curl -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X POST 'https://${NEXUS_URL}/service/rest/v1/tags/associate/UAT_Quality_Pass?wait=true&repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' -H 'accept: application/json' "
-     }
-    }
-  }
+  /*
   stage('Promote to Prod?') {
     when {
           expression {
@@ -367,12 +179,6 @@ pipeline {
     when {
       allOf{
           expression {
-              (resultstring =~ "UAT_Quality_Pass")
-          }
-          expression {
-              (resultstring =~ "UAT_Security_Pass")
-          }
-          expression {
               !(env.GIT_BRANCH =~ "develop")
           }
           expression {
@@ -383,7 +189,7 @@ pipeline {
     steps {
       script {
         openshift.withCluster() {
-          openshift.withProject(env4) {
+          openshift.withProject(prod) {
             if (openshift.selector('dc', deploymentConfig).exists()) {
               openshift.selector('dc', deploymentConfig).delete()
               openshift.selector('svc', deploymentConfig).delete()
@@ -396,7 +202,9 @@ pipeline {
         }
       }
     }
-  }*/
+  }
+  */
  }
 }
+
 

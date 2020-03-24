@@ -1,0 +1,237 @@
+def imageBuildConfig = "good-beers"
+def deploymentConfig = "good-beers"
+def dockerRegistry = "nexus-docker-technet.apps.ocp4.technet.local"
+//def dockerRegistry = "docker.io/devopsprojects"
+def dev = "good-beers"
+def sit = "good-beers-sit"
+def uat = "good-beers-uat"
+def gitDiff
+def changes = "Changes:\n"
+build = currentBuild
+    changes += "In ${build.id}:\n"
+    for (changeLog in build.changeSets) {
+        for(entry in changeLog.items) {
+            for(file in entry.affectedFiles) {
+                changes += "* ${file.path}\n"
+            }
+        }
+    }
+pipeline {
+  agent {
+        label 'mvn'
+    }
+  environment {
+        artifact_id = "good-beers"
+        GITLAB_URL = 'http://technet-gitlab-technet.apps.ocp4.technet.local/root/good-beer-backend.git'
+        NEXUS_URL = "technet-nexus3-technet.apps.ocp4.technet.local"
+        NEXUS_REPOSITORY = "docker-private"
+        NEXUS_VERSION = "nexus3"
+        NEXUS_PROTOCOL = "https"
+        NEXUS_ARTIFACT_REPOSITORY = "good-beers-backend"
+        NEXUS_CREDENTIAL_ID = "nexus"
+
+    }
+   stages {
+    stage('Build App') {
+      steps {
+        // git branch: ${BRANCH}, url: 'http://gitlab-ee.13.94.25.165.nip.io/root/demo.git'
+          script {
+            def pom = readMavenPom file: 'pom.xml'
+            version = pom.version
+            gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
+          }
+          // echo changes
+          //echo gitDiff
+          sh " mvn -f pom.xml clean install -DskipTests=true"
+      }
+    }
+    stage('Create Image Builder') {
+     steps {
+      script {
+        openshift.withCluster() {
+            openshift.withProject(dev) {
+            if (openshift.selector('bc', deploymentConfig).exists()) {
+              openshift.selector("bc", imageBuildConfig).delete()
+            }
+            if (openshift.selector('dc', deploymentConfig).exists()) {
+              openshift.selector('dc', deploymentConfig).delete()
+              openshift.selector('svc', deploymentConfig).delete()
+              openshift.selector('route', deploymentConfig).delete()
+            }
+            openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-docker")
+			//openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true")
+            }
+        }
+      }
+     }
+    }
+    stage('Build Image') {
+     steps {
+       sh "rm -rf oc-build && mkdir -p oc-build/deployments"
+       sh "cp target/ROOT.jar oc-build/deployments/ROOT.jar"
+       script {
+         openshift.withCluster() {
+           openshift.withProject(dev) {
+             openshift.selector("bc", imageBuildConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
+           }
+         }
+       }
+     }
+   }
+   stage('Deploy DEV') {
+     when {
+        expression {
+          openshift.withCluster() {
+            openshift.withProject(dev) {
+              return !openshift.selector('dc', deploymentConfig).exists()
+            }
+          }
+        }
+      }
+     steps {
+      script {
+       openshift.withCluster() {
+        openshift.withProject(dev) {
+         def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
+		 //def app = openshift.newApp(deploymentConfig+":latest")
+         app.narrow("svc").expose();
+         def dc = openshift.selector("dc", deploymentConfig)
+         while (dc.object().spec.replicas != dc.object().status.availableReplicas) {
+            sleep 30
+         }
+         // openshift.set("triggers", "dc/"+deploymentConfig, "--manual")
+		 def connected = openshift.verifyService(deploymentConfig)
+		 if (connected) {
+			echo "Able to connect to ${deploymentConfig}"
+		 } else {
+			echo "Unable to connect to ${deploymentConfig}"
+		 }
+        }
+       }
+    }
+   }
+  }
+    stage('Unit Test') {
+     steps {
+       sh "mvn -f pom.xml test"
+       //sh "curl -H \"Content-Type: multipart/form-data\" -u demo:Abcd@123 -F \"file=@./target/surefire-reports/TEST-com.example.demo.DemoApplicationTests.xml\" http://13.94.39.23:8080/rest/raven/1.0/import/execution/junit?projectKey=TES"
+     }
+    }
+  stage('Deploy to SIT') {
+    steps {
+     script {
+      openshift.withCluster() {
+       openshift.withProject(sit) {
+        if (openshift.selector('dc', deploymentConfig).exists()) {
+              openshift.selector('dc', deploymentConfig).delete()
+              openshift.selector('svc', deploymentConfig).delete()
+              openshift.selector('route', deploymentConfig).delete()
+            }
+        def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
+        app.narrow("svc").expose();
+      }
+     }
+    }
+   }
+  }
+  stage('Promote to UAT?') {
+    when {
+      allOf{
+          expression {
+              !(env.GIT_BRANCH =~ "develop")
+          }
+          expression {
+              !(env.GIT_BRANCH =~ "feature")
+          }
+      }
+    }
+    steps {
+      timeout(time:10, unit:'MINUTES') {
+      input message: "Promote to UAT?", ok: "Promote", submitter: "uat_admin-admin-edit-view"
+      }
+    }
+  }
+  stage('Deploy UAT') {
+    when {
+      allOf{
+          expression {
+              !(env.GIT_BRANCH =~ "develop")
+          }
+          expression {
+              !(env.GIT_BRANCH =~ "feature")
+          }
+      }
+    }
+    steps {
+      script {
+        openshift.withCluster() {
+          openshift.withProject(uat) {
+            if (openshift.selector('dc', deploymentConfig).exists()) {
+              openshift.selector('dc', deploymentConfig).delete()
+              openshift.selector('svc', deploymentConfig).delete()
+              openshift.selector('route', deploymentConfig).delete()
+            }
+            // openshift.newApp(deploymentConfig +":${version}").narrow("svc").expose()
+            def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
+            app.narrow("svc").expose();
+         }
+        }
+      }
+    }
+  }
+  /*
+  stage('Promote to Prod?') {
+    when {
+          expression {
+              !(env.GIT_BRANCH =~ "develop")
+          }
+          expression {
+              !(env.GIT_BRANCH =~ "feature")
+          }
+    }
+    steps {
+      timeout(time:10, unit:'MINUTES') {
+      input message: "Promote to Prod?", ok: "Promote", submitter: "prd_admin-admin-edit-view"
+      script {
+        sleep 5
+        sh script: "curl -s -u RS7rXnVf:vuLK4eR53KJSNBpTQ39mG31VZJMZZF9ZQonIPyr83SDv -X GET 'https://${NEXUS_URL}/service/rest/v1/search?repository=${NEXUS_REPOSITORY}&format=docker&name=${artifact_id}&version=${version}' > test.out"
+        resultstring =  readFile('test.out').trim()
+        jsonObj = readJSON text: resultstring
+        resultstring = "${jsonObj.items.tags}"
+        }
+        echo "Current tags: ${resultstring}"
+      }
+    }
+  }
+  stage('Deploy Prod') {
+    when {
+      allOf{
+          expression {
+              !(env.GIT_BRANCH =~ "develop")
+          }
+          expression {
+              !(env.GIT_BRANCH =~ "feature")
+          }
+      }
+    }
+    steps {
+      script {
+        openshift.withCluster() {
+          openshift.withProject(prod) {
+            if (openshift.selector('dc', deploymentConfig).exists()) {
+              openshift.selector('dc', deploymentConfig).delete()
+              openshift.selector('svc', deploymentConfig).delete()
+              openshift.selector('route', deploymentConfig).delete()
+            }
+            // openshift.newApp(deploymentConfig +":${version}").narrow("svc").expose()
+            def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--insecure-registry=true")
+            app.narrow("svc").expose();
+         }
+        }
+      }
+    }
+  }
+  */
+ }
+}
+
