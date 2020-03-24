@@ -81,13 +81,13 @@ pipeline {
           openshift.withCluster() {
             openshift.withProject(dev) {
               if (!openshift.selector('bc', deploymentConfig).exists()) {
-                openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-docker")
-                openshift.selector("bc", imageBuildConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
+                openshift.newBuild("--name="+ deploymentConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-docker")
+                openshift.selector("bc", deploymentConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
               } else {
                 def bc = openshift.selector("bc/${deploymentConfig}").object()
                 bc.spec.output.to['name']="${dockerRegistry}/${deploymentConfig}:${version}"
                 openshift.apply(bc)
-                openshift.selector("bc", imageBuildConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
+                openshift.selector("bc", deploymentConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
               }
             }
           }
