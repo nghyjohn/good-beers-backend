@@ -69,7 +69,7 @@ pipeline {
             def pom = readMavenPom file: 'pom.xml'
             version = pom.version
             deploymentConfig = pom.name
-            artifact_id = .pom.artifactId
+            artifact_id = pom.artifactId
             gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
           }
           sh " mvn -f pom.xml clean install -DskipTests=true"
