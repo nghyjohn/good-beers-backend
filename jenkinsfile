@@ -57,28 +57,28 @@ def deployment(namespace,deploymentConfig,dockerRegistry,version) {
 pipeline {
   agent {
         label 'mvn'
-    }
+  }
   environment {
         NEXUS_URL = "technet-nexus3-technet.apps.ocp4.technet.local"
         NEXUS_REPOSITORY = "docker-private"
-    }
-   stages {
+  }
+  stages {
     stage('Build App') {
       steps {
-          script {
-            def pom = readMavenPom file: 'pom.xml'
-            version = pom.version
-            deploymentConfig = pom.name
-            artifact_id = pom.artifactId
-            gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
-          }
-          sh " mvn -f pom.xml clean install -DskipTests=true"
+        script {
+          def pom = readMavenPom file: 'pom.xml'
+          version = pom.version
+          deploymentConfig = pom.name
+          artifact_id = pom.artifactId
+          gitDiff = sh(script: "git diff HEAD^ HEAD", returnStdout: true).trim()
+        }
+        sh " mvn -f pom.xml clean install -DskipTests=true"
       }
     }
     stage('Build Image') {
-     steps {
-      script {
-        openshift.withCluster() {
+      steps {
+        script {
+          openshift.withCluster() {
             openshift.withProject(dev) {
               if (!openshift.selector('bc', deploymentConfig).exists()) {
                 openshift.newBuild("--name="+ imageBuildConfig, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ deploymentConfig +":${version}", "--to-docker=true", "--push-secret=nexus-docker")
@@ -90,9 +90,9 @@ pipeline {
                 openshift.selector("bc", imageBuildConfig).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
               }
             }
+          }
         }
       }
-     }
     }
     stage('Deploy DEV') {
       steps {
@@ -111,42 +111,43 @@ pipeline {
       steps {
         script {
           deployment('sit',deploymentConfig,dockerRegistry,version)
+        }
       }
     }
-  stage('Promote to UAT?') {
-    when {
-      allOf{
+    stage('Promote to UAT?') {
+      when {
+        allOf{
           expression {
-              !(env.GIT_BRANCH =~ "develop")
+            !(env.GIT_BRANCH =~ "develop")
           }
           expression {
-              !(env.GIT_BRANCH =~ "feature")
+            !(env.GIT_BRANCH =~ "feature")
           }
+        }
+      }
+      steps {
+        timeout(time:10, unit:'MINUTES') {
+        input message: "Promote to UAT?", ok: "Promote", submitter: "uat_admin-admin-edit-view"
+        }
       }
     }
-    steps {
-      timeout(time:10, unit:'MINUTES') {
-      input message: "Promote to UAT?", ok: "Promote", submitter: "uat_admin-admin-edit-view"
+    stage('Deploy UAT') {
+      when {
+        allOf{
+            expression {
+                !(env.GIT_BRANCH =~ "develop")
+            }
+            expression {
+                !(env.GIT_BRANCH =~ "feature")
+            }
+        }
+      }
+      steps {
+        script {
+            deployment('uat',deploymentConfig,dockerRegistry,version)
+        }
       }
     }
-  }
-  stage('Deploy UAT') {
-    when {
-      allOf{
-          expression {
-              !(env.GIT_BRANCH =~ "develop")
-          }
-          expression {
-              !(env.GIT_BRANCH =~ "feature")
-          }
-      }
-    }
-    steps {
-      script {
-          deployment('uat',deploymentConfig,dockerRegistry,version)
-      }
-    }
-  }
   /*
   stage('Promote to Prod?') {
     when {
