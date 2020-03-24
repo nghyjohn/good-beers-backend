@@ -77,6 +77,8 @@ pipeline {
     }
     stage('Build Image') {
       steps {
+        sh "rm -rf oc-build && mkdir -p oc-build/deployments"
+        sh "cp target/${deploymentConfig}-${version}.jar oc-build/deployments/ROOT.jar"
         script {
           openshift.withCluster() {
             openshift.withProject(dev) {
