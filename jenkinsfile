@@ -64,6 +64,19 @@ pipeline {
         NEXUS_REPOSITORY = "docker-private"
   }
   stages {
+    stage('Code Analysis') {
+      steps {
+        withSonarQubeEnv('SonarQube') {
+          sh "mvn -f pom.xml clean package sonar:sonar -DskipTests=true"
+          }
+        script{
+          echo "Checking SonarQube Quality Gate"
+          timeout(time: 1, unit: 'HOURS') { // Just in case something goes wrong, pipeline will be killed after a timeout
+            waitForQualityGate abortPipeline: true
+          }
+        }
+      }
+    }
     stage('Build App') {
       steps {
         script {
