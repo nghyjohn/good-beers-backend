@@ -1,0 +1,288 @@
+def dockerRegistry = "registry.apps.cp-uat.asia2.ccb2.com"
+def namespace = "good-beers"
+// oc adm policy add-cluster-role-to-user cluster-admin system:serviceaccount:technet:default --rolebinding-name=cluster-admin
+
+def deployment(namespace,deploymentConfig,dockerRegistry,version,app_name) {
+  openshift.withCluster() {
+    openshift.withProject(namespace) {
+      if (!openshift.selector('svc', app_name).exists()) {
+        def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ app_name +":${version}", "--insecure-registry=true" ,"-l app=${app_name},version=v${version}", "--name=${deploymentConfig}")
+        openshift.selector('svc', deploymentConfig).delete()
+        openshift.create("svc", "clusterip", app_name, "--tcp=8080:8080")
+        def svc = openshift.selector("svc/${app_name}").object()
+        svc.spec.selector['app']=app_name
+        svc.spec.ports[0].name="tcp-"+app_name
+        openshift.apply(svc)
+        sleep 10
+
+        echo "Add sidecar"
+        def dc = openshift.selector("dc/${deploymentConfig}").object()
+        dc.spec.template.metadata.annotations['sidecar.istio.io/inject']="true"
+        openshift.apply(dc)
+
+        echo "Create Destination Rule"
+        destinationRule=[
+                          "apiVersion": "networking.istio.io/v1alpha3",
+                          "kind": "DestinationRule",
+                          "metadata": [
+                            "name": app_name
+                          ],
+                          "spec": [
+                            "host": app_name,
+                            "trafficPolicy": [
+                              "tls": [
+                                "mode": "ISTIO_MUTUAL"
+                              ]
+                            ],
+                            "subsets": [
+                              [
+                                "name": deploymentConfig,
+                                "labels": [
+                                  "version": "v"+version
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+        openshift.apply(destinationRule)
+
+        echo "Create Gateway"
+        gateway=[
+                  "apiVersion": "networking.istio.io/v1alpha3",
+                  "kind": "Gateway",
+                  "metadata": [
+                    "name": app_name+"-gateway"
+                  ],
+                  "spec": [
+                    "selector": [
+                      "istio": "ingressgateway"
+                    ],
+                    "servers": [
+                      [
+                        "port": [
+                          "number": 80,
+                          "name": "http",
+                          "protocol": "HTTP"
+                        ],
+                        "hosts": [
+                          "*"
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+        openshift.apply(gateway)
+
+        echo "Create Virtual Service"
+        virtualService= [
+                          "apiVersion": "networking.istio.io/v1alpha3",
+                          "kind": "VirtualService",
+                          "metadata": [
+                            "name": app_name
+                          ],
+                          "spec": [
+                            "hosts": [
+                              "*"
+                            ],
+                            "gateways": [
+                              app_name+"-gateway"
+                            ],
+                            "http": [
+                              [
+                                "route": [
+                                  [
+                                    "destination": [
+                                      "host": app_name,
+                                      "port": [
+                                        "number": 8080
+                                      ],
+                                      "subset": deploymentConfig
+                                    ],
+                                    "weight": 100
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+        openshift.apply(virtualService)
+
+
+
+
+        // openshift.set("env", "dc/"+deploymentConfig, "--from configmap/aiaagentapp-config")
+        // openshift.selector('svc', deploymentConfig).delete()
+        // dc = openshift.selector('dc', deploymentConfig)
+        // dc.expose("--port=8080")
+        // app.narrow("svc").expose("--port=8080")
+      } else {
+        if (!openshift.selector('dc', deploymentConfig).exists()){
+
+          def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ app_name +":${version}", "--insecure-registry=true" ,"-l app=${app_name},version=v${version}", "--name=${deploymentConfig}")
+          openshift.selector('svc', deploymentConfig).delete()
+          sleep 10
+
+          echo "Add sidecar"
+          def dc = openshift.selector("dc/${deploymentConfig}").object()
+          dc.spec.template.metadata.annotations['sidecar.istio.io/inject']="true"
+          openshift.apply(dc)
+
+          echo "Update Destination Rule"
+          def dr = openshift.selector("destinationRule/${app_name}").object()
+          newDestinationRule=[
+                            "apiVersion": "networking.istio.io/v1alpha3",
+                            "kind": "DestinationRule",
+                            "metadata": [
+                              "name": app_name
+                            ],
+                            "spec": [
+                              "host": app_name,
+                              "trafficPolicy": [
+                                "tls": [
+                                  "mode": "ISTIO_MUTUAL"
+                                ]
+                              ],
+                              "subsets": [
+                                [
+                                  "name": deploymentConfig,
+                                  "labels": [
+                                    "version": "v"+version
+                                  ]
+                                ],
+                                dr.spec.subsets[0]
+                              ]
+                            ]
+                          ]
+          openshift.apply(newDestinationRule, "--overwrite=true")
+          sleep 10
+
+          echo "Update Virtual Service"
+          def vs = openshift.selector("virtualService/${app_name}").object()
+          newVirtualService= [
+                            "apiVersion": "networking.istio.io/v1alpha3",
+                            "kind": "VirtualService",
+                            "metadata": [
+                              "name": app_name
+                            ],
+                            "spec": [
+                              "hosts": [
+                                "*"
+                              ],
+                              "gateways": [
+                                app_name+"-gateway"
+                              ],
+                              "http": [
+                                [
+                                  "route": [
+                                    [
+                                      "destination": [
+                                        "host": app_name,
+                                        "port": [
+                                          "number": 8080
+                                        ],
+                                        "subset": deploymentConfig
+                                      ],
+                                      "weight": 0
+                                    ],
+                                    vs.spec.http[0].route[0]
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+          openshift.selector("virtualService/${app_name}").delete()
+          openshift.apply(newVirtualService)
+          sleep 30
+          input message: "Change the service to new version?", ok: "Yes"
+          def newVS = openshift.selector("virtualService/${app_name}").object()
+          newVS.spec.http[0].route[0].weight=100
+          newVS.spec.http[0].route[1].weight=0
+          openshift.apply(newVS)
+        } else {
+          openshift.raw("import-image "+dockerRegistry+"/"+deploymentConfig+":${version} --insecure=true --confirm=true")
+          
+        }
+
+        // openshift.set("triggers", "dc/"+deploymentConfig, "--remove-all")
+        // openshift.tag( dockerRegistry+"/"+deploymentConfig+":${version}", "${deploymentConfig}:${version}")
+        // openshift.set("env", "dc/"+deploymentConfig, "--from configmap/aiaagentapp-config", "--overwrite=true")
+        // openshift.set("triggers", "dc/"+deploymentConfig, "--from-image=${deploymentConfig}:${version} -c ${deploymentConfig}")
+        // openshift.set("triggers", "dc/"+deploymentConfig, "--auto")
+
+      }
+      sleep 20
+    }
+  }
+}
+
+pipeline {
+  agent {
+        label 'mvn'
+  }
+  environment {
+        NEXUS_URL = "technet-nexus3-technet.apps.ocp4.technet.local"
+        NEXUS_REPOSITORY = "docker-private"
+  }
+  stages {
+/*
+    stage('Code Analysis') {
+      steps {
+        withSonarQubeEnv('SonarQube') {
+          sh "mvn -f pom.xml package sonar:sonar -DskipTests=true"
+          }
+        script{
+          echo "Checking SonarQube Quality Gate"
+          timeout(time: 1, unit: 'HOURS') { // Just in case something goes wrong, pipeline will be killed after a timeout
+            waitForQualityGate abortPipeline: true
+          }
+        }
+      }
+    }
+*/
+    stage('Build App') {
+      steps {
+        script {
+          def pom = readMavenPom file: 'pom.xml'
+          version = pom.version
+          app_name = pom.name
+          deploymentConfig = app_name+"-"+version.replace(".","-")
+          artifact_id = pom.artifactId
+        }
+        sh " mvn -f pom.xml clean install -DskipTests=true"
+      }
+    }
+    stage('Build Image') {
+      steps {
+        sh "rm -rf oc-build && mkdir -p oc-build/deployments"
+        sh "cp target/${app_name}-${version}.jar oc-build/deployments/ROOT.jar"
+        script {
+          openshift.withCluster() {
+            openshift.withProject(namespace) {
+              if (!openshift.selector('bc', app_name).exists()) {
+                openshift.newBuild("--name="+ app_name, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ app_name +":${version}", "--to-docker=true", "--push-secret=nexus-docker", "-l app=${app_name}")
+                openshift.selector("bc", app_name).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
+              } else {
+                def bc = openshift.selector("bc/${app_name}").object()
+                bc.spec.output.to['name']="${dockerRegistry}/${app_name}:${version}"
+                openshift.apply(bc)
+                openshift.selector("bc", app_name).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
+              }
+            }
+          }
+        }
+      }
+    }
+    stage('Deploy DEV') {
+      steps {
+        script {
+          deployment(namespace,deploymentConfig,dockerRegistry,version,app_name)
+        }
+      }
+    }
+    stage('Unit Test') {
+      steps {
+        sh "mvn -f pom.xml test"
+      }
+    }
+  }
+}
