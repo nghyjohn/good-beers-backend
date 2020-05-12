@@ -217,7 +217,7 @@ def deployment(namespace,deploymentConfig,dockerRegistry,version,app_name) {
 
 pipeline {
   agent {
-        label 'mvn'
+        label 'maven'
   }
   environment {
         NEXUS_URL = "technet-nexus3-technet.apps.ocp4.technet.local"
