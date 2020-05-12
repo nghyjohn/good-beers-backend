@@ -1,4 +1,4 @@
-def dockerRegistry = "registry.apps.cp-uat.asia2.ccb2.com"
+def dockerRegistry = "image-registry.openshift-image-registry.svc:5000"
 def namespace = "good-beers"
 // oc adm policy add-cluster-role-to-user cluster-admin system:serviceaccount:technet:default --rolebinding-name=cluster-admin
 
