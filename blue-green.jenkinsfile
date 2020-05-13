@@ -266,7 +266,7 @@ pipeline {
                 openshift.selector("bc", app_name).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
               } else {
                 def bc = openshift.selector("bc/${app_name}").object()
-                bc.spec.output.to['name']="${dockerRegistry}/${app_name}:${version}"
+                bc.spec.output.to['name']="${app_name}:${version}"
                 openshift.apply(bc)
                 openshift.selector("bc", app_name).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
               }
