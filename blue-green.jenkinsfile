@@ -119,7 +119,7 @@ def deployment(namespace,deploymentConfig,dockerRegistry,version,app_name) {
       } else {
         if (!openshift.selector('dc', deploymentConfig).exists()){
 
-          def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ app_name +":${version}", "--insecure-registry=true" ,"-l app=${app_name},version=v${version}", "--name=${deploymentConfig}")
+          def app = openshift.newApp(app_name +":${version}","-l app=${app_name},version=v${version}", "--name=${deploymentConfig}")
           openshift.selector('svc', deploymentConfig).delete()
           sleep 10
 
