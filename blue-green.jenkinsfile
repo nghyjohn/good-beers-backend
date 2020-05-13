@@ -262,7 +262,7 @@ pipeline {
             openshift.withProject(namespace) {
               if (!openshift.selector('bc', app_name).exists()) {
                 //openshift.newBuild("--name="+ app_name, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ dockerRegistry +"/"+ app_name +":${version}", "--to-docker=true", "--push-secret=nexus-docker", "-l app=${app_name}")
-                openshift.newBuild("--name="+ app_name, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "-l app=${app_name}")
+                openshift.newBuild("--name="+ app_name, "--image-stream=redhat-openjdk18-openshift:1.4", "--binary=true", "--to="+ app_name +":${version}", "-l app=${app_name}")
                 
                 openshift.selector("bc", app_name).startBuild("--from-file=oc-build/deployments/ROOT.jar", "--wait")
               } else {
