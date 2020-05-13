@@ -7,7 +7,7 @@ def deployment(namespace,deploymentConfig,dockerRegistry,version,app_name) {
     openshift.withProject(namespace) {
       if (!openshift.selector('svc', app_name).exists()) {
         //def app = openshift.newApp("--docker-image="+ dockerRegistry +"/"+ app_name +":${version}", "--insecure-registry=true" ,"-l app=${app_name},version=v${version}", "--name=${deploymentConfig}")
-        def app = openshift.newApp("--docker-image="+ app_name +":${version}", "--insecure-registry=true" ,"-l app=${app_name},version=v${version}", "--name=${deploymentConfig}")
+        def app = openshift.newApp(app_name +":${version}" ,"-l app=${app_name},version=v${version}", "--name=${deploymentConfig}")
         
         openshift.selector('svc', deploymentConfig).delete()
         openshift.create("svc", "clusterip", app_name, "--tcp=8080:8080")
